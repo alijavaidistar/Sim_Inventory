@@ -7,6 +7,7 @@ import json
 import os
 import pygame
 import openpyxl
+import time
 
 
 # change harcode adress
@@ -27,6 +28,8 @@ pygame.init()
 
 # Load the error sound file (replace 'error_sound.wav' with the actual file path)
 error_sound = pygame.mixer.Sound('duplicate_error.mp3')
+success_sound = pygame.mixer.Sound('saved.mp3')
+menu_click = pygame.mixer.Sound("menuclick.mp3")
 
 
 
@@ -132,6 +135,7 @@ def write_sim_inventory():
                 # Append the data to the Google Sheets document
                 worksheet.append_row([order_date, customer, shipment, tracking, qty, status, deliver, comments])
 
+                success_sound.play()
                 sg.popup("Data saved!",title="Success!")
                 break
 
@@ -141,7 +145,7 @@ def write_sim_inventory():
 
 
 # Scan Driver ID
-def driver_id():
+def driver_id(): # qouta 60 values in a minutes only
 
 
     # Initialize a list to store scanned serial numbers
@@ -184,16 +188,18 @@ def driver_id():
 
     # screen
     layout = [
+
+        [sg.Text("Please scan a maximum of 60 per minute.",background_color="#247DBF",text_color="")],
         [sg.CalendarButton("Ship date:", format='%m/%d/%Y', tooltip=""), sg.Input(key="Driver_ID_ship_date")],
         [sg.Text("Customer:"), sg.DropDown(customer_driver_id, key="driverid_customer", size=(20, 0))],
         [sg.Text("Scan:"), sg.Input(key="driverid_barcode")],
         [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True)],
-        [sg.Multiline(key="barcode_saved", disabled=True,size=(50, 20))],
+        [sg.Multiline(key="barcode_saved", disabled=True,size=(50, 20),background_color="#D3D3D3",text_color="black")],
         [sg.Button("Submit"),sg.Button("Help")],  # Fixed missing closing bracket for the "Submit" button
 
     ]
 
-    window = sg.Window("Geometris LP SIM Inventory 2023 - Sim entry ", layout,icon="geo_default_logo.ico")
+    window = sg.Window("Geometris LP SIM Inventory 2023 - Sim entry ", layout,icon="ble_driver.ico")
 
     while True:
         event, values = window.read()
@@ -204,7 +210,6 @@ def driver_id():
         if event == sg.WINDOW_CLOSED or event == 'Back':
             break
 
-        # to add new customer
         elif event =="Add":
             # get the user input values
             each_id = values["driverid_barcode"]  # not working
@@ -213,6 +218,7 @@ def driver_id():
             # serial_number = values['-INPUT-']
             if each_id:
                 if each_id in scanned_serial_numbers:
+                    error_sound.play()
                     sg.popup_error(f'Duplicate Serial Number: {each_id}')
                 else:
                     scanned_serial_numbers.append(each_id)
@@ -224,7 +230,7 @@ def driver_id():
 
             window['barcode_saved'].update('\n'.join(scanned_serial_numbers))
 
-        # to store the data
+
         elif event == 'Submit':
             # get the user input values
             ship_date = values['Driver_ID_ship_date']
@@ -234,21 +240,36 @@ def driver_id():
             #used for google sheets
             driver_barcode_list2 = driver_barcode_list.splitlines()
 
+            #
+
+
 
 
             # 2. if customer in sheet then append to that sheet else create a new sheet and append data to it.
-
+            sheet_name = ""
             # Get a list of all sheet names in the spreadsheet
             sheet_names = [sheet.title for sheet in spreadsheet.worksheets()]
             print(sheet_names)
 
-            # if sheet exists
+
+
+            # if no customer is selected
+            if customer not in customer_driver_id:
+                error_sound.play()
+                sg.popup_error('Please select a customer',title="")
+                continue
+
             if customer in sheet_names:
 
-
                 try:
+                    # add a code that make sure all the data after this will appended starting from second row
+
+
+
                     # Append the data to the Google Sheets document
                     worksheet = spreadsheet.worksheet(customer) # select the sheet where data is supposed to be inputted
+                    # Add an empty row before appending any data
+                    worksheet.append_row(["Nr","SHIP-DATE","QR CODE","SERIAL","MAC"])
                     worksheet.append_row(["",ship_date]) # append data to desired customer sheet
 
 
@@ -256,31 +277,68 @@ def driver_id():
                     for barcode in driver_barcode_list2:
                         worksheet.append_row(["","",barcode])
 
+
+                    # always append the serial to the main sheet where all the IDS exist
+                    #worksheet = spreadsheet.worksheet("DRIVERID_RECEIVED")
+                    #worksheet.append_row([])
+
+                    success_sound.play()
                     sg.popup("Data has been successfully entered!")
 
-                except Exception as e:
-                    sg.popup_error(f"Something went wrong: {e}")
 
-            # if sheet not exist then create a new one
-            elif  customer not in sheet_names: # works good but it should have the default heading
+                except gspread.exceptions.APIError as e:
+                    if 'Quota exceeded' in str(e):
+                        error_sound.play()
+                        sg.popup_error("Limit exceeded. 60 input allowed per minute")
+                    else:
+                        error_sound.play()
+                        sg.popup_error(f"Something went wrong: {e}")
+
+
+            # if added new customer then create new sheet
+            if  customer not in sheet_names:
                     # Create a new sheet with the customer name
                     spreadsheet.add_worksheet(customer, rows=100, cols=20)
 
+                    # Select the newly created worksheet
+                    worksheet = spreadsheet.worksheet(customer)
+
+
                     try:
+
                         # Append the data to the Google Sheets document
+                        worksheet.append_row(["Nr", "SHIP-DATE", "QR CODE", "SERIAL", "MAC"])
+                        time.sleep(2)
                         worksheet.append_row(["", ship_date])  # append data to desired customer sheet
+
+
 
                         # add the list of code in here
                         for barcode in driver_barcode_list2:
                             worksheet.append_row(["", "", barcode])
 
+                        # always append to main sheet
+                        #main_worksheet = spreadsheet.worksheet("MAIN")
+                        #for barcode in driver_barcode_list2:
+                            #main_worksheet.append_row(["", "", barcode])
+
+
                         # always append the serial to the main sheet where all the IDS exist
                         # worksheet = spreadsheet.worksheet("DRIVERID_RECEIVED")
                         # worksheet.append_row([])
+                        success_sound.play()
                         sg.popup("Data has been successfully entered!")
 
-                    except Exception as e:
-                        sg.popup_error(f"Something went wrong: {e}")
+
+                    except gspread.exceptions.APIError as e:
+
+                        if 'Quota exceeded' in str(e):
+                            error_sound.play()
+                            sg.popup_error("Limit exceeded. 60 input allowed per minute.")
+
+                        else:
+                            error_sound.play()
+                            sg.popup_error(f"Something went wrong: {e}")
 
 
 
@@ -381,6 +439,7 @@ while True:
 
     # read the data from sheet
     elif event == "View orders":
+        menu_click.play()
         try:
             google_sheets_url = "https://docs.google.com/spreadsheets/d/1Ki5T0J0j8IHIE59Tvev7h-fFWmc5SFMPC5Hk7vC5EF8/edit#gid=338593507"  # sim inventory link
 
@@ -403,6 +462,7 @@ while True:
             sg.popup_error(custom_error_message, title="Error")
 
     elif event == "Sim entry:":
+        menu_click.play()
         try:
             write_sim_inventory()
 
@@ -412,6 +472,7 @@ while True:
 
 
     elif event =="Scan Driver ID":
+        menu_click.play()
         driver_id()
 
 
