@@ -246,11 +246,6 @@ def driver_id():  # qouta 60 values in a minutes only
                     worksheet = spreadsheet.worksheet(
                         customer)  # select the sheet where data is supposed to be inputted
 
-                    previous_ble_data_ = worksheet.col_values(3)  # testing
-                    if values('driverid_barcode') in previous_ble_data_:
-                        error_sound.play()
-                        sg.popup_error("Duplicate! Driver ID exists.", title="Error")
-                        continue
 
                     # Add an empty row before appending any data
                     worksheet.append_row(["Nr", "SHIP-DATE", "QR CODE", "SERIAL", "MAC"])
