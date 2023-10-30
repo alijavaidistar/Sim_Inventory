@@ -195,12 +195,12 @@ def driver_id(): # qouta 60 values in a minutes only
     layout = [
 
         [sg.Text("Please scan a maximum of 60 per minute.",background_color="#247DBF",text_color="")],
-        [sg.CalendarButton("Ship date:", format='%m/%d/%Y', tooltip=""), sg.Input(key="Driver_ID_ship_date")],
-        [sg.Text("Customer:"), sg.DropDown(customer_driver_id, key="driverid_customer", size=(20, 0))],
-        [sg.Text("Scan:"), sg.Input(key="driverid_barcode")],
+        [sg.CalendarButton("Ship date:", format='%m/%d/%Y', tooltip=""), sg.Input(key="Driver_ID_ship_date",size=(21, 0))],
+        [sg.Text("Customer:",pad=(7,0)), sg.DropDown(customer_driver_id, key="driverid_customer", size=(20, 0),)],
+        [sg.Text("",pad=(12,0)),sg.Text("Scan:",justification="right"), sg.Input(key="driverid_barcode",size=(40,0))],
         [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True)],
         [sg.Multiline(key="barcode_saved", disabled=True,size=(50, 20),background_color="#D3D3D3",text_color="black")],
-        [sg.Button("Submit"),sg.Button("Help")],  # Fixed missing closing bracket for the "Submit" button
+        [sg.Button("Submit"),sg.Button("Clear"),sg.Button("Help")],  # Fixed missing closing bracket for the "Submit" button
 
     ]
 
@@ -215,6 +215,7 @@ def driver_id(): # qouta 60 values in a minutes only
         if event == sg.WINDOW_CLOSED or event == 'Back':
             break
 
+        ######################
         elif event =="Add":
             # get the user input values
             each_id = values["driverid_barcode"]  # not working
@@ -235,7 +236,7 @@ def driver_id(): # qouta 60 values in a minutes only
 
             window['barcode_saved'].update('\n'.join(scanned_serial_numbers))
 
-
+        ######################
         elif event == 'Submit':
             # get the user input values
             ship_date = values['Driver_ID_ship_date']
@@ -266,154 +267,76 @@ def driver_id(): # qouta 60 values in a minutes only
 
 
             ######################################  append to main sheet
+            counter = 0  # Initialize the counter variable
+
             if "MAIN" in sheet_names:
                 try:
+                    main_worksheet = spreadsheet.worksheet("MAIN")
+                    previous_serial_ = main_worksheet.col_values(1)
 
-                    # Append the data to the Google Sheets document
-                    main_worksheet = spreadsheet.worksheet("MAIN")  # all serial should automatically append
-
-                    # Check if user_input already exists in the list of ID's
-                    previous_serial_ = main_worksheet.col_values(1)  # testing
-
-
-
+                    duplicates = []
                     for barcode in driver_barcode_list2:
                         if barcode in previous_serial_:
-                            error_sound.play()
-                            sg.popup_error("Duplicate! This serial number already exists.", title="Error")
-                            break
+                            duplicates.append(barcode)
 
-
-
-
-
-
-                        else:
-
-                            # add the list of code in here
-                            for barcode in driver_barcode_list2:
-                                main_worksheet.append_row([barcode])
-
-
-
-
-
-
-
-
-
-
-                except gspread.exceptions.APIError as e:
-                    if 'Quota exceeded' in str(e):
+                    if duplicates:
                         error_sound.play()
-                        sg.popup_error("Limit exceeded. 60 input allowed per minute")
+                        duplicate_msg = "Duplicates found: " + ", ".join(duplicates)
+                        sg.popup_scrolled(f"These serial numbers already exist: {duplicate_msg}", title="Error!",background_color="black",text_color="red")
                     else:
-                        error_sound.play()
-                        sg.popup_error(f"Something went wrong: {e}")
+                        if counter + len(driver_barcode_list2) <= 60:
+                            # Append all barcodes at once
+                            values_to_append = [[barcode] for barcode in driver_barcode_list2]
+                            main_worksheet.append_rows(values_to_append)
 
-            #####################################
-            if customer in sheet_names:
+                            counter += len(driver_barcode_list2)  # Increment the counter by the number of inputs
 
-                try:
-                    # add a code that make sure all the data after this will appended starting from second row
+                            if counter >= 60:
+                                time.sleep(60)  # Add a 1-minute delay after 60 inputs
+                                counter = 0  # Reset the counter
 
+                            if customer in sheet_names:
+                                worksheet = spreadsheet.worksheet(customer)
+                                # Add an empty row before appending any data
+                                worksheet.append_row(["SHIP-DATE", "QR CODE", "SERIAL", "MAC"])
+                                worksheet.append_row([ship_date])
+                                # Append all barcodes at once
+                                worksheet.append_rows([["", barcode] for barcode in driver_barcode_list2])
+                            else:
+                                spreadsheet.add_worksheet(customer, rows=100, cols=20)
+                                worksheet = spreadsheet.worksheet(customer)
+                                worksheet.append_row(["Nr", "SHIP-DATE", "QR CODE", "SERIAL", "MAC"])
+                                time.sleep(2)
+                                worksheet.append_row(["", ship_date])
+                                worksheet.append_rows([["", "", barcode] for barcode in driver_barcode_list2])
 
-
-                    # Append the data to the Google Sheets document
-                    worksheet = spreadsheet.worksheet(customer) # select the sheet where data is supposed to be inputted
-                    main_worksheet = spreadsheet.worksheet("MAIN")  # all serial should automatically append
-
-                    # Add an empty row before appending any data
-                    worksheet.append_row(["SHIP-DATE","QR CODE","SERIAL","MAC"])
-                    worksheet.append_row([ship_date]) # append data to desired customer sheet
-
-
-                    # add the list of code in here
-                    for barcode in driver_barcode_list2:
-                        worksheet.append_row(["",barcode])
-
-
-
-
-                    success_sound.play()
-                    sg.popup("Data has been successfully entered!")
-
-
-                except gspread.exceptions.APIError as e:
-                    if 'Quota exceeded' in str(e):
-                        error_sound.play()
-                        sg.popup_error("Limit exceeded. 60 input allowed per minute")
-                    else:
-                        error_sound.play()
-                        sg.popup_error(f"Something went wrong: {e}")
-
-
-            ######################################  if added new customer then create new sheet
-            if  customer not in sheet_names:
-                    # Create a new sheet with the customer name
-                    spreadsheet.add_worksheet(customer, rows=100, cols=20)
-
-                    # Select the newly created worksheet
-                    worksheet = spreadsheet.worksheet(customer)
-
-
-                    try:
-
-                        # Append the data to the Google Sheets document
-                        worksheet.append_row(["Nr", "SHIP-DATE", "QR CODE", "SERIAL", "MAC"])
-                        time.sleep(2)
-                        worksheet.append_row(["", ship_date])  # append data to desired customer sheet
-
-
-
-                        # add the list of code in here
-                        for barcode in driver_barcode_list2:
-                            worksheet.append_row(["", "", barcode])
-
-                        # always append to main sheet
-                        #main_worksheet = spreadsheet.worksheet("MAIN")
-                        #for barcode in driver_barcode_list2:
-                            #main_worksheet.append_row(["", "", barcode])
-
-
-                        # always append the serial to the main sheet where all the IDS exist
-                        # worksheet = spreadsheet.worksheet("DRIVERID_RECEIVED")
-                        # worksheet.append_row([])
-                        success_sound.play()
-                        sg.popup("Data has been successfully entered!")
-
-
-                    except gspread.exceptions.APIError as e:
-
-                        if 'Quota exceeded' in str(e):
-                            error_sound.play()
-                            sg.popup_error("Limit exceeded. 60 input allowed per minute.")
-
+                            success_sound.play()
+                            sg.popup("Data has been successfully entered!",title='Success')
                         else:
                             error_sound.play()
-                            sg.popup_error(f"Something went wrong: {e}")
+                            sg.popup_error("Limit exceeded. 60 input allowed per minute",title="Wait")
 
+                except gspread.exceptions.APIError as e:
+                    error_sound.play()
+                    if 'Quota exceeded' in str(e):
+                        sg.popup_error("Limit exceeded. 60 input allowed per minute")
+                    else:
+                        sg.popup_error(f"Something went wrong: {e}")
 
+        ######################
+        elif event == "Clear":
+            window["barcode_saved"].update("")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        ######################
+        elif event=="Help":
+            sg.popup_ok("To add a new customer, please configure the Notepad file in the program directory.",title="BLE DRIVER ID")
 
     window.close()
+
+
+def tool_tag():
+    pass
+
 
 
 
@@ -438,10 +361,10 @@ sg.set_global_icon("geo_default_logo.ico")
 
 layout = [
 
-    [sg.Text("Geometris LP SIM Inventory 2023 - V1.0", text_color="white",),sg.Image(filename="geologo2_.png")],#sg.Image(filename="C:\\Users\\ali\\PycharmProjects\\Sim_Inventory\\geologo2_.png")], fix image
+    [sg.Text("Geometris LP SIM Inventory 2023 - V1.1", text_color="white",),sg.Image(filename="geologo2_.png")],#sg.Image(filename="C:\\Users\\ali\\PycharmProjects\\Sim_Inventory\\geologo2_.png")], fix image
     [sg.Text("Geometris Support Projects",justification="right",expand_x=True)],
     [sg.Text("Select option:")],
-    [sg.Button("View orders"), sg.Button("Sim entry:"), sg.Button("Driver ID entry")],
+    [sg.Button("View orders"), sg.Button("Sim entry:"), sg.Button("Driver ID entry"),sg.Button("Tool Tag entry")],
     #[sg.InputText(key="-URL-")],
 ]
 
@@ -449,7 +372,11 @@ layout = [
 
 
 
-window = sg.Window("Geo Sim Inventory - V1.0 - September 2023", layout,titlebar_background_color="black",icon="geo_default_logo.ico")
+window = sg.Window("Geo Sim Inventory - V1.1 - September 2023", layout,titlebar_background_color="black",icon="geo_default_logo.ico")
+
+# progress bar
+progress_bar = sg.ProgressBar(100, orientation='h', size=(20, 20), key='progressbar')
+
 
 while True:
     event, values = window.read()
@@ -502,6 +429,9 @@ while True:
             error_sound.play()
             custom_error_message = "Please verify your internet connection or the existence of the file "
             sg.popup_error(custom_error_message, title="Error")
+
+    elif event == "Tool Tag entry":
+        pass
 
 
 
