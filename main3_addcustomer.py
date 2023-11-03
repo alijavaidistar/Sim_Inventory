@@ -40,8 +40,8 @@ g_api = "readin_googlesheet.json"
 
 
 
-
-
+########################################################################################################################
+# functions start
 
 
 # complete but confirm exception error
@@ -151,16 +151,9 @@ def write_sim_inventory():
     window.close()
 
 
+
 # Scan Driver ID
 def driver_id(): # qouta 60 values in a minutes only
-
-    ####################function to add row number
-    def add_row_numbers(values):
-        multiline_value = values['barcode_saved'].split('\n')
-        output = ""
-        for i, line in enumerate(multiline_value):
-            output += f"{i + 1}. {line}\n"
-        window['barcode_saved'].update(output)
 
 
 
@@ -209,7 +202,7 @@ def driver_id(): # qouta 60 values in a minutes only
         [sg.CalendarButton("Ship date:", format='%m/%d/%Y', tooltip=""), sg.Input(key="Driver_ID_ship_date",size=(21, 0))],
         [sg.Text("Customer:",pad=(7,0)), sg.DropDown(customer_driver_id, key="driverid_customer", size=(20, 0),)],
         [sg.Text("",pad=(12,0)),sg.Text("Scan:",justification="right"), sg.Input(key="driverid_barcode",size=(40,0))],
-        [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True),sg.Button("Count"),sg.Button("Samples"),sg.Button("Inventory"),],
+        [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True),sg.Button("Samples")],
         [sg.Multiline(key="barcode_saved", disabled=True,size=(50, 20),background_color="#D3D3D3",text_color="black")],
         [sg.Button("Submit"),sg.Button("Clear"),sg.Button("Timer"),sg.Button("Help")],  # Fixed missing closing bracket for the "Submit" button
 
@@ -344,11 +337,11 @@ def driver_id(): # qouta 60 values in a minutes only
 
         ######################
         elif event=="Help":
-            sg.popup_ok("To add a new customer, please configure the Notepad file in the program directory.",title="BLE DRIVER ID")
+            message = "To add a new customer, please configure the Notepad file in the program directory." \
+                      "The name of the file is: customer_data_driverID.txt "
 
-        ######################
-        elif event =="Count":
-            add_row_numbers(values)
+            sg.popup_ok(message,title="BLE DRIVER ID")
+
 
         ######################
         elif event =="Timer":
@@ -412,64 +405,14 @@ def driver_id(): # qouta 60 values in a minutes only
             plt.show()
 
 
-        elif event =="Inventory":
-            main_worksheet = spreadsheet.worksheet("INVENTORY")
-
-            # Get the data range of the worksheet
-            data = main_worksheet.get_all_values()
-
-            # Calculate the total number of cells that have data
-            num_rows = len(data)
-            num_columns = len(data[0]) if data else 0
-            total_cells = num_rows * num_columns
-
-            sg.popup(f'Total in stock: {total_cells}', title='Statistics Result')
-
-        """
-        elif event =="Order":
-            # Get all worksheet titles
-            all_worksheets = [worksheet.title for worksheet in spreadsheet.worksheets()]
-
-            # Exclude "MAIN" and "SAMPLE" from the list
-            relevant_worksheets = [worksheet for worksheet in all_worksheets if worksheet not in ["MAIN", "SAMPLE"]]
-
-            total_cells_list = []
-            for worksheet_title in relevant_worksheets:
-                worksheet = spreadsheet.worksheet(worksheet_title)
-                data = worksheet.get_all_values()
-                num_rows = len(data)
-                num_columns = len(data[0]) if data else 0
-                total_cells_list.append(num_rows * num_columns)
-
-            # Create a bar graph
-            fig, ax = plt.subplots()
-            ax.bar(relevant_worksheets, total_cells_list, color='skyblue')
-            ax.set_title('Total BLE Orders')
-            ax.set_xlabel('Customers')
-            ax.set_ylabel('Quantity')
-            plt.xticks(rotation=45, ha='right')
-            for i, v in enumerate(total_cells_list):
-                ax.text(i, v + 3, str(v), ha='center')
-
-            plt.tight_layout()
-            plt.show()
-            """
-
-
-
-
     window.close()
 
 
+
+# Scan Tool ID
 def tool_tag():
 
-    ####################function to add row number
-    def add_row_numbers(values):
-        multiline_value = values['barcode_saved'].split('\n')
-        output = ""
-        for i, line in enumerate(multiline_value):
-            output += f"{i + 1}. {line}\n"
-        window['barcode_saved'].update(output)
+
 
 
     ####################################################
@@ -516,8 +459,8 @@ def tool_tag():
          sg.DropDown(customer_tool_id, key="toolid_customer", size=(20, 0), )],
         [sg.Text("", pad=(12, 0)), sg.Text("Scan:", justification="right"),
          sg.Input(key="toolid_barcode", size=(40, 0))],
-        [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True), sg.Button("Count"),
-         sg.Button("Samples"), sg.Button("Inventory"), ],
+        [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True),
+         sg.Button("Samples"), ],
         [sg.Multiline(key="barcode_saved", disabled=True, size=(50, 20), background_color="#D3D3D3",
                       text_color="black")],
         [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Timer"), sg.Button("Help")],
@@ -644,12 +587,9 @@ def tool_tag():
 
         ######################
         elif event == "Help":
-            sg.popup_ok("To add a new customer, please configure the Notepad file in the program directory.",
-                        title="BLE DRIVER ID")
-
-        ######################
-        elif event == "Count":
-            add_row_numbers(values)
+            message = "To add a new customer, please configure the Notepad file in the program directory." \
+                      "The name of the file is: customer_data_tooltag.txt "
+            sg.popup_ok(message,title="BLE TOOL ID")
 
         ######################
         elif event == "Timer":
@@ -713,56 +653,16 @@ def tool_tag():
             plt.show()
 
 
-        elif event == "Inventory":
-            main_worksheet = spreadsheet.worksheet("INVENTORY")
-
-            # Get the data range of the worksheet
-            data = main_worksheet.get_all_values()
-
-            # Calculate the total number of cells that have data
-            num_rows = len(data)
-            num_columns = len(data[0]) if data else 0
-            total_cells = num_rows * num_columns
-
-            sg.popup(f'Total in stock: {total_cells}', title='Statistics Result')
-
-        """
-        elif event =="Order":
-            # Get all worksheet titles
-            all_worksheets = [worksheet.title for worksheet in spreadsheet.worksheets()]
-
-            # Exclude "MAIN" and "SAMPLE" from the list
-            relevant_worksheets = [worksheet for worksheet in all_worksheets if worksheet not in ["MAIN", "SAMPLE"]]
-
-            total_cells_list = []
-            for worksheet_title in relevant_worksheets:
-                worksheet = spreadsheet.worksheet(worksheet_title)
-                data = worksheet.get_all_values()
-                num_rows = len(data)
-                num_columns = len(data[0]) if data else 0
-                total_cells_list.append(num_rows * num_columns)
-
-            # Create a bar graph
-            fig, ax = plt.subplots()
-            ax.bar(relevant_worksheets, total_cells_list, color='skyblue')
-            ax.set_title('Total BLE Orders')
-            ax.set_xlabel('Customers')
-            ax.set_ylabel('Quantity')
-            plt.xticks(rotation=45, ha='right')
-            for i, v in enumerate(total_cells_list):
-                ax.text(i, v + 3, str(v), ha='center')
-
-            plt.tight_layout()
-            plt.show()
-            """
 
     window.close()
 
 
+########################################################################################################################
+# functions end
 
 
 
-
+########################################################################################################################
 # Google Sheets authentication##################################################################
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
          "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
