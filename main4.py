@@ -28,12 +28,16 @@ CREDENTIALS_JSON_PATH = os.path.join(current_directory,key)
 pygame.init()
 
 # Load the error sound file (replace 'error_sound.wav' with the actual file path)
-error_sound = pygame.mixer.Sound('duplicate_error.mp3')
-success_sound = pygame.mixer.Sound('saved.mp3')
+error_sound = pygame.mixer.Sound('errorsound.mp3')
+success_sound = pygame.mixer.Sound('successsound.mp3')
 menu_click = pygame.mixer.Sound("menuclick.mp3")
+window_main ={}
 
 # json
 g_api = "readin_googlesheet.json"
+
+# global for URL and json files
+
 
 
 
@@ -148,35 +152,55 @@ def write_sim_inventory():
 
     window.close()
 
+# sim count
+def sim_count():
+    import PySimpleGUI as sg
+
+    def calculate_sim_count(user_input):
+        one_sim = 0.09
+        one_container = 19.93
+
+        sim_weight = user_input - one_container
+        sim_count_total = sim_weight / one_sim
+
+        return sim_count_total
+
+    layout = [
+        [sg.Text("Input the total weight (Sim + Container):")],
+        [sg.InputText(key="weight_input",size=(32,0))],
+        [sg.Button("Calculate"), sg.Button("Exit")],
+        [sg.Text("", size=(30, 1), key="output")]
+    ]
+
+    window = sg.Window("SIM Count", layout)
+
+    while True:
+        event, values = window.read()
+
+        if event == sg.WIN_CLOSED or event == "Exit":
+            break
+
+        if event == "Calculate":
+            try:
+                user_input = float(values["weight_input"])
+                sim_count = calculate_sim_count(user_input)
+                window["output"].update(f"Estimated SIM Count: {int(sim_count)}")
+            except ValueError:
+                sg.popup_error("Invalid input. Please enter a valid number.")
+
+    window.close()
+
+def beacon():
 
 
-# Scan Driver ID
-def driver_id(): # qouta 60 values in a minutes only
+    # Function to get customer names from the customer sheet
+    def get_customer_names(sheet):
+        customers = sheet.col_values(1)[1:]
+        sorted_customers = sorted(customers)
+        return sorted_customers
 
-    # array to store the data from saved
-
-    # Initialize a list to store scanned serial numbers
-    global type_value
-    scanned_serial_numbers = []  # live duplicate catch
-
-    # customer drop-down
-    customer_driver_id = []
-
-    # Open the file and read its contents
-    try:
-        with open('customer_data_driverID.txt', 'r') as file:
-            data = file.read().splitlines()
-    except FileNotFoundError:
-        data = []
-
-    # Append the data to the customer_driver_id list
-    customer_driver_id.extend(data)
-
-
-
-
-    # Replace with the full URL of the Google Sheets document
-    SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1IuVS4mbAziZLVrig5lEwO3K4b3ymvNUhcCSMdJclems/edit#gid=0'
+    ## Replace with the full URL of the Google Sheets document
+    SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1NsC2hFneYMvdYZrIj8ZHLhENlK2BOBBi_rFR3yK_ke4/edit#gid=0'
 
     # Extract the spreadsheet ID from the URL
     spreadsheet_id = re.findall("/spreadsheets/d/([a-zA-Z0-9-_]+)", SPREADSHEET_URL)[0]
@@ -185,540 +209,143 @@ def driver_id(): # qouta 60 values in a minutes only
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     credentials = ServiceAccountCredentials.from_json_keyfile_name("readin_googlesheet.json", scope) # json directory
 
-
     client = gspread.authorize(credentials)
 
     # Open the spreadsheet by ID
     spreadsheet = client.open_by_key(spreadsheet_id)
-    worksheet = spreadsheet.sheet1
+
+    # Open Customer, Sample, and PO sheets
+    customer_sheet = spreadsheet.worksheet("Customers")
+    tool = spreadsheet.worksheet("Tool_PO")
+    driver = spreadsheet.worksheet("Driver_PO")
+    sample_sheet = spreadsheet.worksheet("Samples")
+    table_data = []
+
+    # facts total driver ID sold, and tool tag
+    driver_total = len(driver.get_all_values())-1
+    tool_total= len(tool.get_all_values())-1
+    sample_total = len(sample_sheet.get_all_values()) - 1
 
 
 
-    # screen
+    # for beacon table
+    count_table_data = 0
+    customer_name = 'None'
+
+    # Layout for the GUI
     layout = [
+        [sg.Text("A maximum of 60 entries are permitted within a minute",background_color='Red',text_color='Black',border_width=3)],
+        [sg.CalendarButton("Order date:", format='%m/%d/%Y'),
+         sg.Input(key='-DATE-', do_not_clear=True, pad=(22, 0), size=(18, 1), disabled=True, background_color="#b0b0b0",
+                  text_color="black", tooltip="Click the button to select date")],
+        [sg.Text('Customer:',justification='left'), sg.Combo(values=get_customer_names(customer_sheet), key='-CUSTOMER-',pad=(32,0),size=(16, 1),text_color='white')],
+        [sg.Button('Add Customer', button_color=('white', '#3D3D3D'), border_width=2,)],
+        [sg.Text('Order type:',justification='left'), sg.Radio('Samples', "RADIO1", key='-SAMPLES-'), sg.Radio('PO', "RADIO1", key='-PO-')],
+        [sg.Text('Beacon type:',justification='left'),sg.Text(pad=(3,0)), sg.DropDown(values=['DriverID', 'Tool Tag'], key="device_type",size=(18, 1),text_color='white')],
+        [sg.Text('Scan Beacon: ',justification='left'), sg.InputText(key='-BEACON-',size=(64,1))],
+        [sg.Button('Submit', bind_return_key=True), sg.Button('Exit')],
+        [sg.Table(values=[table_data], headings=['Date', 'Customer', 'Device Type', 'Beacon ID'], key='-TABLE-',background_color='white',alternating_row_color="#b0b0b0",text_color='black',max_col_width=(80),auto_size_columns=False,header_background_color="#247DBF",header_text_color='black',expand_x=True,justification='left',)],
+        [sg.Text(f'         Customer:',font='any 10 bold'),sg.Text(f'{customer_name}',key='name_beacon')],
+        [sg.Text(f' Total Scanned:',font='any 10 bold'),sg.Text(f'{count_table_data}',key='count_beacon')],
+        [sg.Text(f'Total Driver IDs:',font='any 10 bold',text_color='Grey'),sg.Text(f'{driver_total}',text_color='Grey'),sg.Text(pad=(15,0)),sg.Text(f'Total Tool Tags:',font='any 10 bold',text_color='Gray'),sg.Text(f'{tool_total}',text_color='Grey'),sg.Text(pad=(15,0)),sg.Text(f'Total Samples:',font='any 10 bold',text_color='Gray'),sg.Text(f'{sample_total}',text_color='Grey')]
 
-        [sg.Text("Please scan a maximum of 60 per minute.",background_color="RED",text_color="",)],
-        [sg.CalendarButton("Ship date:", format='%m/%d/%Y', tooltip="Select date",), sg.Input(key="Driver_ID_ship_date",size=(21, 0),text_color="white")],
-        [sg.Text("Select option:", background_color="Grey", text_color="White")],
-        [sg.Radio('P.O', "ORDER", key='order'), sg.Radio('Sample', "ORDER", key='sample', default=True)],
-        [sg.Text("Customer:",pad=(7,0)), sg.DropDown(customer_driver_id, key="driverid_customer", size=(20, 0),text_color="white")],
-        [sg.Text("",pad=(12,0)),sg.Text("Scan:",justification="right"), sg.Input(key="driverid_barcode",size=(40,0),text_color="white")],
-        [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True),sg.Button("Samples"),sg.Button("Statistics")],
-        [sg.Multiline(key="barcode_saved", disabled=True,size=(50, 20),background_color="white",text_color="black")],
-        [sg.Button("Submit"),sg.Button("Clear"),sg.Button("Help")],  # Fixed missing closing bracket for the "Submit" button
 
     ]
 
-    window = sg.Window("Driver ID entry ", layout,icon="ble_driver.ico")
+    window = sg.Window('Beacon Scanner', layout,icon='ble_driver.ico')
 
     while True:
         event, values = window.read()
 
-
-
-
-        if event == sg.WINDOW_CLOSED or event == 'Back':
+        if event == sg.WINDOW_CLOSED or event == 'Exit':
             break
 
-        ######################
-        elif event =="Add":
-            # get the user input values
-            each_id = values["driverid_barcode"]  # not working
+        try:
 
-            ############
-            # serial_number = values['-INPUT-']
-            if each_id:
-                if each_id in scanned_serial_numbers:
+            if event == 'Add Customer':
+                new_customer = sg.popup_get_text('Enter new customer name:',title='New Customer')
+                if new_customer:
+                    customer_sheet.append_row([new_customer])
+                    success_sound.play()
+                    sg.popup('Customer added refreshing...',title='Success')
+                    break
+
+            if event == 'Submit' or (event == '-BEACON-' and values['-BEACON-']):
+                # avoid duplicates, get values of all beacons first
+                past_beacons_sample = sample_sheet.col_values(4)
+                past_beacons_driver = driver.col_values(3)
+                past_beacons_tool = tool.col_values(3)
+                past_customers = customer_sheet.col_values(1)
+
+
+                date = values['-DATE-']
+                customer = values['-CUSTOMER-']
+                beacon_id = values['-BEACON-']
+                device_type = values['device_type']
+
+                if not values['-SAMPLES-'] and not values['-PO-']:
                     error_sound.play()
-                    sg.popup_error(f'Duplicate Serial Number: {each_id}')
+                    sg.popup_error('Please select either Samples or PO',title='Error')
+                elif not device_type:
+                    error_sound.play()
+                    sg.popup_error('Please select a device type',title='Error')
+                elif not customer:
+                    error_sound.play()
+                    sg.popup_error('Please select a customer',title='Error')
+                elif not beacon_id:
+                    error_sound.play()
+                    sg.popup_error('Beacon ID cannot be blank', title='Error')
                 else:
-                    scanned_serial_numbers.append(each_id)
-                    # sg.popup(f'Successfully Scanned: {serial_number}')
-                    # Clear the input field
-                    window['driverid_barcode'].update('')
-
-            # Update the output area with all scanned serial numbers
-
-            window['barcode_saved'].update('\n'.join(scanned_serial_numbers))
-
-        ######################
-        elif event == 'Submit':
-            # get the user input values
-            ship_date = values['Driver_ID_ship_date']
-            customer = values['driverid_customer']
-            driver_barcode_list = values['barcode_saved']
-
-            #used for google sheets
-            driver_barcode_list2 = driver_barcode_list.splitlines()
-
-
-
-
-
-
-            # 2. if customer in sheet then append to that sheet else create a new sheet and append data to it.
-            sheet_name = ""
-            # Get a list of all sheet names in the spreadsheet
-            sheet_names = [sheet.title for sheet in spreadsheet.worksheets()]
-            print(sheet_names)
-
-
-
-            ##################################### if no customer is selected
-            if customer not in customer_driver_id:
-                error_sound.play()
-                sg.popup_error('Please select a customer',title="")
-                continue
-
-
-            ######################################  append to main sheet
-            counter = 0  # Initialize the counter variable
-
-            if "MAIN" in sheet_names: ############################################################ issue not scanning in correctly in the PO sheet of TOOL TAG
-                try:
-                    main_worksheet = spreadsheet.worksheet("MAIN")
-                    previous_serial_ = main_worksheet.col_values(1)
-
-                    duplicates = []
-                    for barcode in driver_barcode_list2:
-                        if barcode in previous_serial_:
-                            duplicates.append(barcode)
-
-                    if duplicates:
-                        error_sound.play()
-                        duplicate_msg = "Duplicates found: " + ", ".join(duplicates)
-                        sg.popup_scrolled(f"These serial numbers already exist\n: {duplicate_msg}", title="Error!",background_color="black",text_color="red")
-                    else:
-                        if counter + len(driver_barcode_list2) <= 60:
-                            # Append all barcodes at once
-                            values_to_append = [[barcode] for barcode in driver_barcode_list2]
-                            main_worksheet.append_rows(values_to_append)
-
-                            counter += len(driver_barcode_list2)  # Increment the counter by the number of inputs
-
-                            if counter >= 60:
-                                time.sleep(60)  # Add a 1-minute delay after 60 inputs
-                                counter = 0  # Reset the counter
-
-
-                            # if customer exist and it is a sample then:
-
-                            if values["order"]: # fix this PO ONLY ONLY CODE and fix it for Tool tag as well
-                                type_value = "PO"
-                                po_worksheet = spreadsheet.worksheet("PO")
-                                po_worksheet.append_rows([[ship_date, barcode, customer] for barcode in driver_barcode_list2])
-
-
-
-                            elif values["sample"]:
-                                type_value = "SAMPLE"
-                                sample_worksheet = spreadsheet.worksheet("SAMPLE")
-                                sample_worksheet.append_rows([[ship_date, barcode, "", "",customer] for barcode in driver_barcode_list2])
-
-
-
-
-
-
-
-                            if customer in sheet_names:
-                                worksheet = spreadsheet.worksheet(customer)
-
-                            else:
-                                spreadsheet.add_worksheet(customer, rows=100, cols=20)
-                                time.sleep(2)
-                                worksheet = spreadsheet.worksheet(customer)
-                                sample_worksheet = spreadsheet.worksheet("SAMPLE")
-
-
-
-
-                            # Add an empty row before appending any data
-                            worksheet.append_row(["SHIP-DATE", "QR CODE", "SERIAL", "MAC", "TYPE"])
-                            worksheet.append_row([ship_date])
-                            # Append all barcodes at once
-                            worksheet.append_rows([["", barcode, "", "", type_value] for barcode in driver_barcode_list2])
-
-
-                            success_sound.play()
-                            sg.popup("Data has been successfully entered!", title='Success')
-                            break
-
-
-
-                        else:
+                    if values['-SAMPLES-']:
+                        if beacon_id in past_beacons_sample:
                             error_sound.play()
-                            sg.popup_error("Limit exceeded. 60 input allowed per minute",title="Wait")
+                            sg.popup_error('Beacon already exists',title='Error')
+                        else:
+                            sample_sheet.append_row([date, customer, device_type, beacon_id])
+                            table_data.append([date, customer, device_type, beacon_id])
+                    elif values['-PO-']:
+                        if device_type == 'DriverID':
+                            if beacon_id in past_beacons_driver:
+                                error_sound.play()
+                                sg.popup_error('Driver Id already exists',title='Error')
+                            else:
+                                driver.append_row([date, customer, beacon_id])
+                                table_data.append([date, customer, device_type, beacon_id])
+                        elif device_type == 'Tool Tag':
+                            if beacon_id in past_beacons_tool:
+                                error_sound.play()
+                                sg.popup_error('Tool already exists',title='Error')
+                            else:
+                                tool.append_row([date, customer, beacon_id])
+                                table_data.append([date, customer, device_type, beacon_id])
+                    window['-BEACON-'].update("")
+
+                    # Ensure only unique data is appended to table_data*****************fix duplicates should not append to able
+                    #table_data.append([date, customer, device_type, beacon_id])
+
+                    # table data information
+                    count_table_data = len(table_data)
+                    customer_name = customer
+
+                    window['-TABLE-'].update(values=table_data)
+                    window['count_beacon'].update(count_table_data)
+                    window['name_beacon'].update(customer_name)
 
 
 
 
 
-                except gspread.exceptions.APIError as e:
-                    error_sound.play()
-                    if 'Quota exceeded' in str(e):
-                        sg.popup_error("Limit exceeded. 60 input allowed per minute")
-                    else:
-                        sg.popup_error(f"Something went wrong: {e}")
-
-
-        ######################
-        elif event == "Clear":
-            sg.popup_ok("Reopen the window.")
-            break
-
-
-        ######################
-        elif event=="Help":
-            message = "To add a new customer, please configure the Notepad file in the program directory." \
-                      "The name of the file is: customer_data_driverID.txt "
-
-            sg.popup_ok(message,title="BLE DRIVER ID")
-
-        ######################
-        elif event =="Samples":
-            main_worksheet = spreadsheet.worksheet("SAMPLE")
-
-            # Get the data range of the worksheet
-            data = main_worksheet.col_values(5)  # Assuming you want to analyze data from Column E
-
-            # Count the occurrences of each value
-            counts = dict(Counter(data))
-
-            # Extract unique values and their corresponding counts
-            unique_values = list(counts.keys())
-            unique_counts = list(counts.values())
-
-            # Create a bar graph
-            fig, ax = plt.subplots()
-            colors = plt.cm.Paired(np.linspace(0, 1, len(unique_values)))
-            bars = ax.bar(unique_values, unique_counts, color=colors)
-            ax.set_title('Total Samples')
-            ax.set_xlabel('Customer')
-            ax.set_ylabel('Quantity')
-            plt.xticks(rotation=45, ha='right')
-            for bar, count in zip(bars, unique_counts):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), count, ha='center', va='bottom')
-
-            plt.tight_layout()
-
-            plt.show()
-
-        elif event =="Statistics":
-            main_worksheet = spreadsheet.worksheet("PO")
-
-            # Get the data range of the worksheet
-            data = main_worksheet.col_values(3)  # Assuming you want to analyze data from Column E
-
-            # Count the occurrences of each value
-            counts = dict(Counter(data))
-
-            # Extract unique values and their corresponding counts
-            unique_values = list(counts.keys())
-            unique_counts = list(counts.values())
-
-            # Create a bar graph
-            fig, ax = plt.subplots()
-            colors = plt.cm.Paired(np.linspace(0, 1, len(unique_values)))
-            bars = ax.bar(unique_values, unique_counts, color=colors)
-            ax.set_title('Total PO')
-            ax.set_ylabel('Quantity')
-            plt.xticks(rotation=45, ha='right')
-            for bar, count in zip(bars, unique_counts):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), count, ha='center', va='bottom')
-
-            plt.tight_layout()
-
-            plt.show()
-
-
-
-
-
+        except Exception as e:
+            error_sound.play()
+            custom_error_message = "You have reached entry limit, please wait for 60 seconds, else contact developer"
+            sg.popup_error(custom_error_message, title="Error")
 
     window.close()
 
 
 
-# Scan Tool ID
-def tool_id(): # qouta 60 values in a minutes only
 
-    # array to store the data from saved
 
-    # Initialize a list to store scanned serial numbers
-    global type_value
-    scanned_serial_numbers = []  # live duplicate catch
-
-    # customer drop-down
-    customer_tool_id = []
-
-    # Open the file and read its contents
-    try:
-        with open('customer_data_tooltag.txt', 'r') as file:
-            data = file.read().splitlines()
-    except FileNotFoundError:
-        data = []
-
-    # Append the data to the customer_tool_id list
-    customer_tool_id.extend(data)
-
-
-
-
-    # Replace with the full URL of the Google Sheets document
-    SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1-pyinVIiW4vFy0NCCbgRz8bAZhV-ZXAOiMf7RpObL6g/edit#gid=825221153'
-
-    # Extract the spreadsheet ID from the URL
-    spreadsheet_id = re.findall("/spreadsheets/d/([a-zA-Z0-9-_]+)", SPREADSHEET_URL)[0]
-
-    # Create a scope and credentials
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    credentials = ServiceAccountCredentials.from_json_keyfile_name("readin_googlesheet.json", scope) # json directory
-
-
-    client = gspread.authorize(credentials)
-
-    # Open the spreadsheet by ID
-    spreadsheet = client.open_by_key(spreadsheet_id)
-    worksheet = spreadsheet.sheet1
-
-
-
-    # screen
-    layout = [
-
-        [sg.Text("Please scan a maximum of 60 per minute.",background_color="RED",text_color="")],
-        [sg.CalendarButton("Ship date:", format='%m/%d/%Y', tooltip="Select date",), sg.Input(key="tool_ID_ship_date",size=(21, 0),text_color="white")],
-        [sg.Text("Select option:", background_color="Grey", text_color="White")],
-        [sg.Radio('P.O', "ORDER", key='order'), sg.Radio('Sample', "ORDER", key='sample', default=True)],
-        [sg.Text("Customer:",pad=(7,0)), sg.DropDown(customer_tool_id, key="toolid_customer", size=(20, 0),text_color="white")],
-        [sg.Text("",pad=(12,0)),sg.Text("Scan:",justification="right"), sg.Input(key="toolid_barcode",size=(40,0),text_color="white")],
-        [sg.Button("Add", key="Add", bind_return_key=True, auto_size_button=True),sg.Button("Samples"),sg.Button("Statistics")],
-        [sg.Multiline(key="barcode_saved", disabled=True,size=(50, 20),background_color="white",text_color="black")],
-        [sg.Button("Submit"),sg.Button("Clear"),sg.Button("Help")],  # Fixed missing closing bracket for the "Submit" button
-
-    ]
-
-    window = sg.Window("tool ID entry ", layout,icon="ble_tool.ico")
-
-    while True:
-        event, values = window.read()
-
-
-
-
-        if event == sg.WINDOW_CLOSED or event == 'Back':
-            break
-
-        ######################
-        elif event =="Add":
-            # get the user input values
-            each_id = values["toolid_barcode"]  # not working
-
-            ############
-            # serial_number = values['-INPUT-']
-            if each_id:
-                if each_id in scanned_serial_numbers:
-                    error_sound.play()
-                    sg.popup_error(f'Duplicate Serial Number: {each_id}')
-                else:
-                    scanned_serial_numbers.append(each_id)
-                    # sg.popup(f'Successfully Scanned: {serial_number}')
-                    # Clear the input field
-                    window['toolid_barcode'].update('')
-
-            # Update the output area with all scanned serial numbers
-
-            window['barcode_saved'].update('\n'.join(scanned_serial_numbers))
-
-        ######################
-        elif event == 'Submit':
-            # get the user input values
-            ship_date = values['tool_ID_ship_date']
-            customer = values['toolid_customer']
-            tool_barcode_list = values['barcode_saved']
-
-            #used for google sheets
-            tool_barcode_list2 = tool_barcode_list.splitlines()
-
-
-
-
-
-
-            # 2. if customer in sheet then append to that sheet else create a new sheet and append data to it.
-            sheet_name = ""
-            # Get a list of all sheet names in the spreadsheet
-            sheet_names = [sheet.title for sheet in spreadsheet.worksheets()]
-            print(sheet_names)
-
-
-
-            ##################################### if no customer is selected
-            if customer not in customer_tool_id:
-                error_sound.play()
-                sg.popup_error('Please select a customer',title="")
-                continue
-
-
-            ######################################  append to main sheet
-            counter = 0  # Initialize the counter variable
-
-            if "MAIN" in sheet_names:
-                try:
-                    main_worksheet = spreadsheet.worksheet("MAIN")
-                    previous_serial_ = main_worksheet.col_values(1)
-
-                    duplicates = []
-                    for barcode in tool_barcode_list2:
-                        if barcode in previous_serial_:
-                            duplicates.append(barcode)
-
-                    if duplicates:
-                        error_sound.play()
-                        duplicate_msg = "Duplicates found: " + ", ".join(duplicates)
-                        sg.popup_scrolled(f"These serial numbers already exist\n: {duplicate_msg}", title="Error!",background_color="black",text_color="red")
-                    else:
-                        if counter + len(tool_barcode_list2) <= 60:
-                            # Append all barcodes at once
-                            values_to_append = [[barcode] for barcode in tool_barcode_list2]
-                            main_worksheet.append_rows(values_to_append)
-
-                            counter += len(tool_barcode_list2)  # Increment the counter by the number of inputs
-
-                            if counter >= 60:
-                                time.sleep(60)  # Add a 1-minute delay after 60 inputs
-                                counter = 0  # Reset the counter
-
-
-                            # select Radio:
-
-                            if values["order"]:
-                                type_value = "PO"
-                                sample_worksheet = spreadsheet.worksheet("PO")
-                                sample_worksheet.append_rows(
-                                    [[ship_date, barcode, customer] for barcode in tool_barcode_list2])
-
-
-
-                            elif values["sample"]:
-                                type_value = "SAMPLE"
-                                sample_worksheet = spreadsheet.worksheet("SAMPLE")
-                                sample_worksheet.append_rows([[ship_date, barcode, "", "",customer] for barcode in tool_barcode_list2])
-
-
-
-
-                            if customer in sheet_names:
-                                worksheet = spreadsheet.worksheet(customer)
-
-                            else:
-                                spreadsheet.add_worksheet(customer, rows=100, cols=20)
-                                time.sleep(2)
-                                worksheet = spreadsheet.worksheet(customer)
-                                sample_worksheet = spreadsheet.worksheet("SAMPLE")
-
-                            # Add an empty row before appending any data
-                            worksheet.append_row(["SHIP-DATE", "QR CODE", "SERIAL", "MAC", "TYPE"])
-                            worksheet.append_row([ship_date])
-                            # Append all barcodes at once
-                            worksheet.append_rows([["", barcode, "", "", type_value] for barcode in tool_barcode_list2])
-
-
-                            success_sound.play()
-                            sg.popup("Data has been successfully entered!", title='Success')
-                            break
-
-
-
-                        else:
-                            error_sound.play()
-                            sg.popup_error("Limit exceeded. 60 input allowed per minute",title="Wait")
-
-
-
-
-
-                except gspread.exceptions.APIError as e:
-                    error_sound.play()
-                    if 'Quota exceeded' in str(e):
-                        sg.popup_error("Limit exceeded. 60 input allowed per minute")
-                    else:
-                        sg.popup_error(f"Something went wrong: {e}")
-
-
-        ######################
-        elif event == "Clear":
-            sg.popup_ok("Reopen the window.")
-            break
-
-
-        ######################
-        elif event=="Help":
-            message = "To add a new customer, please configure the Notepad file in the program directory." \
-                      "The name of the file is: customer_data_toolID.txt "
-
-            sg.popup_ok(message,title="BLE tool ID")
-
-        ######################
-        elif event =="Samples":
-            main_worksheet = spreadsheet.worksheet("SAMPLE")
-
-            # Get the data range of the worksheet
-            data = main_worksheet.col_values(5)  # Assuming you want to analyze data from Column E
-
-            # Count the occurrences of each value
-            counts = dict(Counter(data))
-
-            # Extract unique values and their corresponding counts
-            unique_values = list(counts.keys())
-            unique_counts = list(counts.values())
-
-            # Create a bar graph
-            fig, ax = plt.subplots()
-            colors = plt.cm.Paired(np.linspace(0, 1, len(unique_values)))
-            bars = ax.bar(unique_values, unique_counts, color=colors)
-            ax.set_title('Total Samples')
-            ax.set_ylabel('Quantity')
-            plt.xticks(rotation=45, ha='right')
-            for bar, count in zip(bars, unique_counts):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), count, ha='center', va='bottom')
-
-            plt.tight_layout()
-
-            plt.show()
-
-        ######################
-        elif event == "Statistics":
-            main_worksheet = spreadsheet.worksheet("PO")
-
-            # Get the data range of the worksheet
-            data = main_worksheet.col_values(3)  # Assuming you want to analyze data from Column E
-
-            # Count the occurrences of each value
-            counts = dict(Counter(data))
-
-            # Extract unique values and their corresponding counts
-            unique_values = list(counts.keys())
-            unique_counts = list(counts.values())
-
-            # Create a bar graph
-            fig, ax = plt.subplots()
-            colors = plt.cm.Paired(np.linspace(0, 1, len(unique_values)))
-            bars = ax.bar(unique_values, unique_counts, color=colors)
-            ax.set_title('Total PO')
-            ax.set_ylabel('Quantity')
-            plt.xticks(rotation=45, ha='right')
-            for bar, count in zip(bars, unique_counts):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), count, ha='center', va='bottom')
-
-            plt.tight_layout()
-
-            plt.show()
-
-
-
-    window.close()
 
 
 
@@ -747,13 +374,15 @@ client = gspread.authorize(creds)
 # Homescreen##################################################################################
 sg.theme("darkblue")
 sg.set_global_icon("geo_default_logo.ico")
+sg.set_options(keep_on_top=True)
 
 layout = [
 
-    [sg.Text("Geometris LP SIM Inventory 2023", text_color="white",),sg.Image(filename="geologo2_.png")],#sg.Image(filename="C:\\Users\\ali\\PycharmProjects\\Sim_Inventory\\geologo2_.png")], fix image
+    [sg.Text("Geometris LP SIM Inventory 2024",relief='sunken', text_color="white",font=('Arial',15),border_width=5),sg.Image(filename="geologo2_.png")],#sg.Image(filename="C:\\Users\\ali\\PycharmProjects\\Sim_Inventory\\geologo2_.png")], fix image
     [sg.Text("Geometris Support Projects",justification="right",expand_x=True)],
-    [sg.Text("Select option:")],
-    [sg.Button("View orders"), sg.Button("Sim entry:"), sg.Button("Driver ID entry"),sg.Button("Tool Tag entry")],
+    [sg.Text("")],
+    [sg.Button("Sim Entry",border_width=3,),sg.Button("View Sim",border_width=3),sg.Button("Sim Count",border_width=3),sg.Button('Beacon',border_width=3)],
+
     #[sg.InputText(key="-URL-")],
 ]
 
@@ -761,19 +390,19 @@ layout = [
 
 
 
-window = sg.Window("Geo Sim Inventory - V1.1 - BUILD November 2023", layout,titlebar_background_color="black",icon="geo_default_logo.ico")
+window_main = sg.Window("Geo Sim Inventory - V1.1.2 - BUILD MARCH 2024", layout,titlebar_background_color="black",icon="geo_default_logo.ico")
 
 # progress bar
 progress_bar = sg.ProgressBar(100, orientation='h', size=(20, 20), key='progressbar')
 
 
 while True:
-    event, values = window.read()
+    event, values = window_main.read()
     if event in (sg.WIN_CLOSED, 'Back'):
         break
 
     # read the data from sheet
-    elif event == "View orders":
+    elif event == "View Sim":
 
         try:
             google_sheets_url = "https://docs.google.com/spreadsheets/d/1Ki5T0J0j8IHIE59Tvev7h-fFWmc5SFMPC5Hk7vC5EF8/edit#gid=338593507"  # sim inventory link
@@ -795,43 +424,36 @@ while True:
                 create_table(headers, data_array)
         except Exception as e:
             error_sound.play()
-            custom_error_message = "Please verify your internet connection or the existence of the file "
+            custom_error_message = "Please verify your internet connection or contact Developer"
             sg.popup_error(custom_error_message, title="Error")
 
-    elif event == "Sim entry:":
+    elif event == "Sim Entry":
 
         try:
             write_sim_inventory()
 
         except Exception as e:
             error_sound.play()
-            custom_error_message = "Please verify your internet connection or the existence of the file "
+            custom_error_message = "Please verify your internet connection or contact Developer "
             sg.popup_error(custom_error_message, title="Error")
 
-
-    elif event =="Driver ID entry":
+    elif event =="Sim Count":
         try:
 
-            driver_id()
+            sim_count()
 
         except Exception as e:
             error_sound.play()
-            custom_error_message = "Please verify your internet connection or the existence of the file "
+            custom_error_message = "Please verify your internet connection or contact Developer "
             sg.popup_error(custom_error_message, title="Error")
 
-    elif event == "Tool Tag entry":
-        try:
-
-            tool_id()
-
+    elif event =='Beacon':
+        try:   
+            beacon()
         except Exception as e:
             error_sound.play()
-            custom_error_message = "Please verify your internet connection or the existence of the file "
+            custom_error_message = "Please verify your internet connection or contact Developer"
             sg.popup_error(custom_error_message, title="Error")
 
 
-
-
-
-
-window.close()
+window_main.close()
